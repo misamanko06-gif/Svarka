@@ -1,4 +1,4 @@
-const CACHE = 'zvarka-v2';
+const CACHE = 'zvarka-v3';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon.svg'];
 
 self.addEventListener('install', e => {

@@ -299,11 +299,166 @@ function bike(p){
   return{summary,parts,notes,steps,svgs:[{t:'Вигляд спереду',svg:SV(vw,vh,b)}]};
 }
 
+/* --- Вага металу --- */
+function weight(p){
+  const ty=p.type,A=p.A,B=p.B,T=p.T;let kgm,prof,name;
+  const mn=ty==2?Math.min(A,B):A;
+  if(ty<=3&&T*2>=mn)throw 0;
+  if(ty==1){kgm=KS(A,T);prof=`${A}×${A}×${T}`;name='Квадратна труба';}
+  else if(ty==2){kgm=KR(A,B,T);prof=`${A}×${B}×${T}`;name='Прямокутна труба';}
+  else if(ty==3){kgm=KC(A,T);prof=`⌀${A}×${T}`;name='Кругла труба';}
+  else if(ty==4){kgm=A*T*0.00785;prof=`${T} мм, ширина ${A}`;name='Лист / смуга';}
+  else if(ty==5){kgm=T*(A+B-T)*0.00785;prof=`${A}×${B}×${T}`;name='Кутник';}
+  else if(ty==6){kgm=A*A*0.00785;prof=`${A}×${A}`;name='Пруток квадрат';}
+  else{kgm=Math.PI/4*A*A*0.00785;prof=`⌀${A}`;name='Пруток круглий';}
+  const one=p.Len/1000*kgm;
+  const notes=['Теоретична вага для сталі 7850 кг/м³ без допусків; фактична може відрізнятись на 3–8%.'];
+  if(ty==4)notes.push('Для листа: A = ширина, T = товщина, довжина в полі «Довжина». Рифлений лист важчий приблизно на 5%.');
+  if(ty==5)notes.push('Кутник рахується без урахування радіусів закруглення.');
+  return{summary:[['Вага 1 погонного метра',f1(kgm)+' кг'],['Вага 1 штуки',f1(one)+' кг'],['Загальна довжина',f1(p.Qty*p.Len/1000)+' м']],parts:[part(name,prof,p.Qty,p.Len,kgm)],notes,steps:[],svgs:[]};
+}
+
+/* --- Поручні сходів --- */
+function stairs(p){
+  const Lh=p.Lh,H=p.H,hr=p.hr,db=p.db,tube=p.tube,k=H/Lh,Ls=Math.hypot(H,Lh),ang=Math.atan(k)*180/Math.PI;
+  const np=Math.ceil(Lh/p.step)+1,hb=hr-150-20-tube/2;
+  if(hb<=50||tube<=4||np<2)throw 0;
+  const n=Math.ceil((Lh-p.gap)/(p.gap+db)),g=(Lh-n*db)/(n+1),parts=[],notes=[];
+  parts.push(part('Поручень','кругла '+tube+'×2',1,Ls,KC(tube,2)));
+  parts.push(part('Нижній прогін','40×20×2',1,Ls,KR(40,20,2)));
+  parts.push(part('Стійки','40×40×2',np,hr-tube/2,KS(40,2)));
+  parts.push(part('Прути (вертикальні)','квадрат '+db+'×'+db,n,hb,db*db*0.00785));
+  parts.push(plate('П’ятки стійок','лист 4 мм',np,100,100,4));
+  if(p.gap>110)notes.push('Просвіт між прутами більший за ~100 мм: де можуть бути діти, зазвичай потрібно не більше 100 мм. Перевірте за ДБН.');
+  if(hr<900)notes.push('Висота поручня менша за ~900 мм. Для сходів зазвичай потрібно не менше. Перевірте за ДБН.');
+  notes.push('Торці поручня, прогону й прутів зрізайте під кут '+f1(ang)+'°. Просвіт між прутами по горизонталі: '+f1(g)+' мм.');
+  notes.push('Розрахунок для прямого маршу; площадки й повороти додайте окремо.');
+  const steps=[
+    'Нарізати деталі, торці поручня і прогону зрізати під '+f1(ang)+'°.',
+    'На шаблоні по куту прихопити прути до нижнього прогону з кроком '+f1(g+db)+' мм.',
+    'Накласти поручень, прихопити, перевірити прути рівнем по вертикалі.',
+    'Обварити вузли через один, щоб панель не повело.',
+    'Приварити стійки з кроком до '+p.step+' мм по горизонталі, п’ятки до стійок. Кріпити до сходів анкерами.',
+    'Зачистити шви, ґрунт і фарба.'
+  ];
+  const summary=[['Довжина по схилу',r0(Ls)+' мм'],['Кут',f1(ang)+'°'],['Стійок',np+' шт'],['Прутів',n+' шт'],['Крок прутів',f1(g+db)+' мм']];
+  const mx=30,s=Math.min((380-2*mx-50)/Lh,170/(H+hr)),w=Lh*s,h=H*s,gy=16+(hr+H)*s,vw=w+2*mx+50,vh=gy+54;
+  let b=LN(mx,gy,mx+w,gy-h,'stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity=".6"');
+  for(let i=0;i<np;i++){const x=i*Lh/(np-1),X=mx+x*s,y=gy-k*x*s;b+=LN(X,y,X,y-(hr-tube/2)*s,'stroke="currentColor" stroke-width="2.5"')}
+  for(let i=0;i<n;i++){const x=g*(i+1)+db*i+db/2,X=mx+x*s,y=gy-k*x*s;b+=LN(X,y-160*s,X,y-(hr-tube/2)*s,'stroke="currentColor" stroke-width="1.2"')}
+  b+=LN(mx,gy-hr*s,mx+w,gy-h-hr*s,`stroke="${AMB}" stroke-width="3.5"`);
+  b+=LN(mx,gy-150*s,mx+w,gy-h-150*s,`stroke="${AMB}" stroke-width="2.5"`);
+  b+=dimH(mx,mx+w,gy+16,r0(Lh))+dimV(gy-h,gy,mx+w+20,H);
+  b+=`<text x="${mx+w/2}" y="${gy+46}" text-anchor="middle" font-size="11" fill="currentColor">поручень ${hr} мм · кут ${f1(ang)}° · по схилу ${r0(Ls)} мм</text>`;
+  return{summary,parts,notes,steps,svgs:[{t:'Вигляд збоку (марш)',svg:SV(vw,vh,b)}]};
+}
+
+/* --- Навіс / козирок --- */
+function canopy(p){
+  const W=p.W,P=p.P,k=p.slope/100,al=Math.atan(k),Lr=P/Math.cos(al),v=p.v,a=p.a,wt=p.wt;
+  if(v<=P*k+50||p.step<=0||p.pstep<=0)throw 0;
+  const strut=Math.hypot(P,v-P*k),nf=Math.ceil(W/p.step)+1,np=Math.ceil(Lr/p.pstep)+1,prof=`${a}×${a}×${wt}`,kg=KS(a,wt),parts=[],notes=[];
+  parts.push(part('Кроква (верхній пояс)',prof,nf,Lr,kg));
+  parts.push(part('Розкіс',prof,nf,strut,kg));
+  parts.push(part('Вертикальна планка біля стіни',prof,nf,v,kg));
+  parts.push(part('Прогони','40×20×2',np,W,KR(40,20,2)));
+  parts.push(plate('Закладні пластини','лист 4 мм',nf*2,100,100,4));
+  if(p.slope<10)notes.push('Ухил менший за 10%: для профнастилу й металочерепиці зазвичай потрібно 10–15% і більше.');
+  if(P>1500)notes.push('Виніс понад 1500 мм: потрібні стійки або перевірений розрахунком посилений переріз.');
+  notes.push('Розрахунок дає геометрію й метал, а не міцність: сніг і вітер на вашу ділянку враховуйте окремо (переріз, анкери).');
+  notes.push('Площа покриття ~'+f1(W*Lr/1e6*1.1)+' м² з урахуванням нахлестів ~10%.');
+  const steps=[
+    'Нарізати кроквяні, розкоси й вертикальні планки, зрізати торці під кут '+f1(al*180/Math.PI)+'°.',
+    'Зібрати кронштейн-трикутник на шаблоні: прихопити, перевірити розміри, обварити.',
+    'Зібрати всі '+nf+' кронштейнів по одному шаблону, щоб були однакові.',
+    'Закріпити кронштейни на стіні анкерами через пластини, виставити по рівню й лазеру.',
+    'Приварити прогони з кроком '+r0((Lr)/(np-1))+' мм, перевірити діагоналі.',
+    'Зачистити шви, ґрунт і фарба, потім монтаж покриття.'
+  ];
+  const summary=[['Кронштейнів',nf+' шт (крок ≤ '+p.step+' мм)'],['Довжина кроквяної',r0(Lr)+' мм'],['Довжина розкоса',r0(strut)+' мм'],['Ухил',p.slope+'% ('+f1(al*180/Math.PI)+'°)'],['Прогонів',np+' шт']];
+  const mx=36,s=Math.min((380-2*mx-30)/P,150/v),y0=22,wallH=(v+80)*s;
+  let b=LN(mx,y0-14,mx,y0+wallH,'stroke="currentColor" stroke-width="4" opacity=".7"');
+  b+=LN(mx,y0,mx+P*s,y0+P*k*s,`stroke="${AMB}" stroke-width="3.5"`);
+  b+=LN(mx,y0+v*s,mx+P*s,y0+P*k*s,'stroke="currentColor" stroke-width="2.5"');
+  b+=LN(mx,y0,mx,y0+v*s,`stroke="${AMB}" stroke-width="3.5"`);
+  b+=dimH(mx,mx+P*s,y0+wallH+10,r0(P));
+  b+=`<text x="${mx+P*s/2}" y="${y0+wallH+40}" text-anchor="middle" font-size="11" fill="currentColor">вис. біля стіни ${v} · кроква ${r0(Lr)} · ${p.slope}%</text>`;
+  return{summary,parts,notes,steps,svgs:[{t:'Кронштейн збоку (стіна ліворуч)',svg:SV(P*s+2*mx+30,y0+wallH+54,b)}]};
+}
+
+/* --- Ворота / хвіртка --- */
+function gate(p){
+  const L=p.leaves,W=p.W,H=p.H,a=p.a,wt=p.wt,m=p.mid,prof=`${a}×${a}×${wt}`,kg=KS(a,wt),parts=[],notes=[];
+  if(W<=2*a+100||H<=2*a+100)throw 0;
+  parts.push(part('Вертикалі рами',prof,2*L,H,kg));
+  parts.push(part('Верх і низ рами',prof,2*L,W-2*a,kg));
+  if(m>0)parts.push(part('Проміжні горизонталі',prof,m*L,W-2*a,kg));
+  if(p.diag==1)parts.push(part('Розкіс (діагональ)',prof,L,Math.hypot(W-2*a,H-2*a),kg));
+  const hing=(H>1500?3:2)*L,area=L*W*H/1e6;
+  if(W>1500)notes.push('Стулка ширша за 1500 мм: розкіс обов’язковий, посиліть профіль і петлі, передбачте упор.');
+  if(p.diag!=1)notes.push('Без розкоса стулку з часом «провисне» з боку замка.');
+  notes.push('Проріз під '+(L==1?'хвіртку':'ворота')+': ~'+r0(L*W+(L+1)*5)+' мм (зазори по 5–10 мм).');
+  notes.push('Площа заповнення (профнастил/лист): ~'+f1(area)+' м². Петлі навантажувальні: '+hing+' шт. Стовпи під ворота зазвичай товщі за раму (напр. 80×80).');
+  const steps=[
+    'Нарізати деталі, торці зачистити.',
+    'Зібрати раму стулки на рівній плиті: прихопити кути, перевірити діагоналі (різниця до 2 мм).',
+    p.diag==1?'Вставити розкіс від нижнього кута з боку петель до верхнього кута з боку замка, прихопити.':null,
+    m>0?'Вставити проміжні горизонталі, прихопити.':null,
+    'Обварити раму з чергуванням боків, щоб не повело. Приварити петлі й виставити стулку на стовпи.',
+    'Накласти заповнення, закріпити, зачистити шви, ґрунт і фарба.'
+  ].filter(Boolean);
+  const summary=[['Стулок',L+' шт'],['Розмір стулки',W+'×'+H+' мм'],['Петлі',hing+' шт']];
+  const gp=10,tw=L*W+gp*(L-1),mx=24,s=Math.min((380-2*mx-50)/tw,170/H),gy=14+H*s,vw=tw*s+2*mx+50,vh=gy+44;
+  let b=LN(mx-8,gy,mx+tw*s+8,gy,GR);
+  for(let i=0;i<L;i++){
+    const x0=mx+i*(W+gp)*s,w=W*s,h=H*s,as=a*s,y0=gy-h;
+    b+=`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="none" stroke="${AMB}" stroke-width="2"/><rect x="${x0+as}" y="${y0+as}" width="${w-2*as}" height="${h-2*as}" fill="none" stroke="currentColor" stroke-width="1"/>`;
+    for(let j=1;j<=m;j++){const y=y0+as+(h-2*as)*j/(m+1);b+=LN(x0+as,y,x0+w-as,y,'stroke="currentColor" stroke-width="1.5"')}
+    if(p.diag==1){const left=(i==0);b+=left?LN(x0+as,y0+h-as,x0+w-as,y0+as,'stroke="currentColor" stroke-width="1.5"'):LN(x0+w-as,y0+h-as,x0+as,y0+as,'stroke="currentColor" stroke-width="1.5"')}
+  }
+  b+=dimH(mx,mx+W*s,gy+14,W)+dimV(gy-H*s,gy,mx+tw*s+16,H);
+  return{summary,parts,notes,steps,svgs:[{t:'Вигляд спереду',svg:SV(vw,vh,b)}]};
+}
+
+/* --- Лавка --- */
+function bench(p){
+  const L=p.L,D=p.D,Hs=p.Hs,Hb=p.Hb,a=p.a,wt=p.wt,sw=p.sw,sg=p.sg,prof=`${a}×${a}×${wt}`,kg=KS(a,wt),parts=[],notes=[];
+  const n=Math.floor((D+sg)/(sw+sg));
+  if(n<1||Hs<=a*2||D<=a*3)throw 0;
+  parts.push(part('Ніжки',prof,4,Hs-a,kg));
+  parts.push(part('Поздовжні (рама сидіння)',prof,2,L,kg));
+  parts.push(part('Поперечини (торці)',prof,2,D-2*a,kg));
+  if(p.back==1){parts.push(part('Стійки спинки',prof,2,Hb,kg));parts.push(part('Верхня планка спинки',prof,1,L,kg));}
+  parts.push({name:'Дошки сидіння (дерево)',prof:sw+'×30',qty:n,txt:r0(L)+' мм',mass:0});
+  if(L>1500)notes.push('Довжина понад 1500 мм: додайте середню пару ніг або поперечину, щоб рама не прогиналась.');
+  notes.push('Дошки: '+n+' шт, проміжок між ними '+sg+' мм. Вага деревини в розрахунок не входить.');
+  const steps=[
+    'Нарізати труби за списком, зачистити торці.',
+    'Зібрати два торцеві U-подібні елементи (дві ніжки + поперечина), перевірити 90°.',
+    'З’єднати торці двома поздовжніми, перевірити діагоналі й рівень.',
+    p.back==1?'Приварити стійки спинки і верхню планку.':null,
+    'Зачистити шви, ґрунт і фарба, потім прикрутити дошки (саморізи в отвори або через кутові планки).'
+  ].filter(Boolean);
+  const summary=[['Дошок сидіння',n+' шт'],['Розмір',L+'×'+D+' мм']];
+  const mx=30,tot=Hs+(p.back==1?Hb:0),s=Math.min((380-2*mx-50)/D,170/tot),gy=14+tot*s,vw=D*s+2*mx+50,vh=gy+40;
+  let b=LN(mx-8,gy,mx+D*s+8,gy,GR);
+  b+=LN(mx,gy,mx,gy-Hs*s,'stroke="currentColor" stroke-width="3"')+LN(mx+D*s,gy,mx+D*s,gy-Hs*s,'stroke="currentColor" stroke-width="3"');
+  b+=LN(mx-6,gy-Hs*s,mx+D*s+6,gy-Hs*s,`stroke="${AMB}" stroke-width="4"`);
+  if(p.back==1)b+=LN(mx+D*s,gy-Hs*s,mx+D*s,gy-(Hs+Hb)*s,`stroke="${AMB}" stroke-width="3"`);
+  b+=dimH(mx,mx+D*s,gy+14,D)+dimV(gy-Hs*s,gy,mx+D*s+20,Hs);
+  return{summary,parts,notes,steps,svgs:[{t:'Вигляд збоку',svg:SV(vw,vh,b)}]};
+}
+
 /* ===== UI розрахунку ===== */
 const YN=[[1,'Так'],[0,'Ні']];
 const CALCS={
   ramp:{name:'Пандус',fn:ramp,f:[['H','Висота підйому, мм',300],['slope','Ухил, %',8],['W','Ширина пандуса, мм',1000],['a','Рама: квадратна труба, мм',40],['wt','Стінка труби, мм',2],['step','Крок поперечин, мм',400],['sheet','Товщина настилу, мм',3],['bump','Бортики 60 мм',1,YN],['rail','Поручні',0,YN],['price','Ціна металу, грн/кг (за бажанням)','']]},
   rail:{name:'Огорожа',fn:railing,f:[['L','Просвіт між стійками, мм',1500],['H','Висота огорожі, мм',1000],['gap','Макс. просвіт між прутами, мм',100],['d','Пруток (квадрат), мм',12],['posts','Стійки в комплекті',1,YN],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  stairs:{name:'Сходи',fn:stairs,f:[['H','Підйом маршу по вертикалі, мм',2800],['Lh','Довжина маршу по горизонталі, мм',3400],['hr','Висота поручня, мм',900],['step','Макс. крок стійок, мм',1000],['gap','Макс. просвіт між прутами, мм',100],['db','Пруток (квадрат), мм',12],['tube','Поручень: кругла труба, мм',42],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  gate:{name:'Ворота',fn:gate,f:[['leaves','Кількість стулок',1,[[1,'1 (хвіртка)'],[2,'2 (ворота)']]],['W','Ширина однієї стулки, мм',1000],['H','Висота, мм',1800],['a','Рама: квадратна труба, мм',40],['wt','Стінка, мм',2],['mid','Проміжні горизонталі',1,[[0,'Немає'],[1,'1'],[2,'2']]],['diag','Розкіс',1,YN],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  canopy:{name:'Навіс',fn:canopy,f:[['W','Ширина по стіні, мм',3000],['P','Виніс від стіни, мм',1500],['slope','Ухил, %',15],['v','Висота кронштейна біля стіни, мм',600],['a','Профіль: квадрат, мм',40],['wt','Стінка, мм',2],['step','Макс. крок кронштейнів, мм',1000],['pstep','Крок прогонів, мм',600],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  bench:{name:'Лавка',fn:bench,f:[['L','Довжина, мм',1500],['D','Глибина сидіння, мм',400],['Hs','Висота сидіння, мм',450],['back','Спинка',1,YN],['Hb','Висота спинки, мм',400],['a','Профіль: квадрат, мм',40],['wt','Стінка, мм',2],['sw','Ширина дошки, мм',60],['sg','Проміжок між дошками, мм',10],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  weight:{name:'Вага металу',fn:weight,f:[['type','Тип профілю',1,[[1,'Квадратна труба'],[2,'Прямокутна труба'],[3,'Кругла труба'],[4,'Лист / смуга'],[5,'Кутник'],[6,'Пруток квадрат'],[7,'Пруток круглий']]],['A','A: сторона / діаметр / ширина, мм',40],['B','B: друга сторона (прямок. труба, кутник), мм',20],['T','Товщина стінки / листа, мм',2],['Len','Довжина, мм',6000],['Qty','Кількість, шт',1],['price','Ціна металу, грн/кг (за бажанням)','']]},
   bike:{name:'Велопарковка',fn:bike,f:[['N','Кількість дуг',4],['Wd','Ширина дуги, мм',600],['Hd','Висота дуги, мм',800],['R','Радіус гину, мм',100],['pitch','Крок між дугами, мм',700],['tube','Труба кругла, діаметр, мм',32],['price','Ціна металу, грн/кг (за бажанням)','']]}
 };
 let ck='ramp';
@@ -335,7 +490,7 @@ function renderOut(res,p){
   h+='<h2 class="s">Список нарізки</h2><table class="kv"><tr><th>Деталь</th><th>Профіль</th><th>Шт</th><th>Розмір</th></tr>'+
      res.parts.map(x=>`<tr><td>${x.name}</td><td>${x.prof}</td><td class="n">${x.qty}</td><td class="n">${x.txt}</td></tr>`).join('')+'</table>';
   h+=`<table class="kv"><tr><td>Орієнтовна вага металу</td><td class="n"><b>${f1(tot)} кг</b></td></tr>`+(p.price>0?`<tr><td>Орієнтовна вартість металу</td><td class="n"><b>${r0(tot*p.price).toLocaleString('uk-UA')} грн</b></td></tr>`:'')+'</table>';
-  h+='<h2 class="s">Порядок зварювання</h2><ol class="steps">'+res.steps.map(s=>`<li>${s}</li>`).join('')+'</ol>';
+  if(res.steps.length)h+='<h2 class="s">Порядок зварювання</h2><ol class="steps">'+res.steps.map(s=>`<li>${s}</li>`).join('')+'</ol>';
   h+='<button class="btn" id="copy">Скопіювати список</button>';
   cout.innerHTML=h;
   cout.querySelectorAll('.pic').forEach((el,i)=>el.onclick=()=>openM({t:res.svgs[i].t,s:res.svgs[i].svg}));
