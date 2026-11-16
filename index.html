@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2937">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<title>Сварка: креслення</title>
+<style>
+:root{--bg:#111827;--card:#1f2937;--line:#374151;--text:#f3f4f6;--muted:#9ca3af;--acc:#f59e0b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 12px 8px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 8px;font-size:20px}
+h1 span{color:var(--acc)}
+input[type=search]{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:16px}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:10px 0 2px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:14px}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#111}
+main{padding:12px;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.card .pic{background:#0b1220;padding:8px;cursor:zoom-in}
+.card svg{width:100%;height:auto;display:block;color:#e5e7eb}
+.card .txt{padding:10px 12px 12px}
+.card h3{margin:0 0 4px;font-size:16px}
+.card p{margin:0;color:var(--muted);font-size:14px}
+.card.nopic .txt{padding:14px 12px}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0}
+#modal{position:fixed;inset:0;background:#000d;display:none;flex-direction:column;z-index:10}
+#modal.on{display:flex}
+#mbar{display:flex;gap:8px;align-items:center;padding:10px;background:var(--bg)}
+#mbar b{flex:1;font-size:15px}
+#mbar button{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:18px}
+#mview{flex:1;overflow:auto;touch-action:pan-x pan-y;background:#0b1220}
+#mview svg{display:block;width:100%;color:#e5e7eb}
+.mode{display:flex;gap:8px;margin:0 0 8px}
+.mode button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:15px;font-weight:600}
+.mode button.on{background:var(--acc);border-color:var(--acc);color:#111}
+#calc{padding:12px;max-width:760px;margin:0 auto}
+#calc .tabs{padding-top:0}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 14px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.form input,.form select{padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:16px;width:100%}
+.warn{background:#3b2a0b;border:1px solid #92610d;color:#fcd34d;border-radius:10px;padding:10px 12px;font-size:14px;margin:8px 0}
+table.kv{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}
+table.kv td,table.kv th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.kv th{color:var(--muted);font-weight:500;font-size:12px}
+table.kv td.n{text-align:right;white-space:nowrap}
+.steps{padding-left:20px;margin:6px 0}.steps li{margin:6px 0}
+.btn{width:100%;padding:12px;border-radius:10px;border:0;background:var(--acc);color:#111;font-size:16px;font-weight:700;margin:10px 0}
+h2.s{font-size:16px;margin:18px 0 4px}
+#calc .card{margin-bottom:12px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Сварка <span>· креслення</span></h1>
+  <div class="mode"><button id="m1" class="on">Довідник</button><button id="m2">Розрахунок</button></div>
+  <input id="q" type="search" placeholder="Пошук: шов, тавр, поручень…">
+  <div class="tabs" id="tabs"></div>
+</header>
+<main id="list"></main>
+<section id="calc" hidden>
+  <div class="tabs" id="ctabs"></div>
+  <form id="cform" class="form" onsubmit="return false"></form>
+  <div id="cout"></div>
+</section>
+
+<div id="modal">
+  <div id="mbar"><b id="mtitle"></b><button id="zm">−</button><button id="zp">+</button><button id="mx">✕</button></div>
+  <div id="mview"></div>
+</div>
+
+<script>
+const S='stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"';
+const W='fill="#f59e0b" fill-opacity=".55" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"';
+const svg=(b)=>`<svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif" font-size="9" fill="currentColor">${b}</svg>`;
+const arrow=`<g ${S}><path d="M30 100 L82 52"/><path d="M82 52 L72 54 M82 52 L80 62"/><path d="M82 52 H175"/></g>`;
+const t=(x,y,s,a='start')=>`<text x="${x}" y="${y}" text-anchor="${a}" stroke="none">${s}</text>`;
+
+const DATA=[
+/* ТИПИ З'ЄДНАНЬ */
+{c:'З’єднання',t:'Стикове (без скосу)',d:'Дві деталі в одній площині торцями. Для тонкого металу (до ~3–4 мм) зазвичай без підготовки кромок.',
+ s:svg(`<g ${S}><rect x="20" y="50" width="68" height="20"/><rect x="112" y="50" width="68" height="20"/></g><path ${W} d="M88 50 L112 50 L112 70 L88 70 Z"/><path ${W} d="M86 50 Q100 40 114 50 Z"/><path ${W} d="M88 70 Q100 78 112 70 Z"/>`+t(100,100,'I-подібний стик','middle'))},
+{c:'З’єднання',t:'Стикове зі скосом (V)',d:'Кромки скошені, утворюють V-розробку. Для середніх товщин, щоб шов проварив усю товщину.',
+ s:svg(`<g ${S}><path d="M20 50 H84 L97 70 H20 Z"/><path d="M180 50 H116 L103 70 H180 Z"/></g><path ${W} d="M84 50 H116 L103 70 H97 Z"/><path ${W} d="M82 50 Q100 38 118 50 Z"/>`+t(100,100,'V-подібний стик','middle'))},
+{c:'З’єднання',t:'Таврове (кутові шви)',d:'Одна деталь упирається в іншу під 90° (стійка на пластині). Шви з обох боків.',
+ s:svg(`<g ${S}><rect x="30" y="80" width="140" height="15"/><rect x="93" y="25" width="14" height="55"/></g><path ${W} d="M93 80 L93 63 L76 80 Z"/><path ${W} d="M107 80 L107 63 L124 80 Z"/>`+t(100,112,'Таврове з’єднання','middle'))},
+{c:'З’єднання',t:'Напусткове',d:'Деталі накладені одна на одну з перекриттям. Кутові шви по краях нахлесту.',
+ s:svg(`<g ${S}><rect x="20" y="60" width="100" height="14"/><rect x="80" y="74" width="100" height="14"/></g><path ${W} d="M120 74 L120 57 L137 74 Z"/><path ${W} d="M80 74 L63 74 L80 91 Z"/>`+t(100,110,'Напусткове з’єднання','middle'))},
+{c:'З’єднання',t:'Кутове',d:'Дві деталі під кутом, кромки зустрічаються на куті. Типове для рамок і коробів.',
+ s:svg(`<g ${S}><rect x="40" y="80" width="86" height="14"/><rect x="126" y="30" width="14" height="64"/></g><path ${W} d="M126 80 L126 63 L109 80 Z"/>`+t(100,112,'Кутове з’єднання','middle'))},
+
+/* ПОЗНАЧЕННЯ */
+{c:'Позначення',t:'Структура позначення шва',d:'Стрілка вказує на шов. Суцільна опорна лінія: шов з боку стрілки. Пунктирна: з протилежного боку. Знак шва стоїть на лінії (за ISO 2553).',
+ s:svg(`${arrow}<path d="M82 58 H175" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" fill="none"/>`+t(30,112,'стрілка')+t(128,44,'суцільна лінія','middle')+t(128,76,'пунктирна лінія','middle'))},
+{c:'Позначення',t:'Кутовий шов, сторона стрілки',d:'Трикутник під суцільною лінією означає шов з того боку, куди вказує стрілка. «z6» поруч означає катет 6 мм.',
+ s:svg(`${arrow}<path ${W} d="M110 52 L124 52 L110 66 Z"/>`+t(100,70,'z6','end')+t(128,100,'з боку стрілки','middle'))},
+{c:'Позначення',t:'Кутовий шов, протилежний бік',d:'Трикутник над суцільною лінією означає шов з протилежного від стрілки боку.',
+ s:svg(`${arrow}<path ${W} d="M110 52 L124 52 L110 38 Z"/>`+t(100,40,'z6','end')+t(128,100,'з протилежного боку','middle'))},
+{c:'Позначення',t:'Кутові шви з обох боків',d:'Два трикутники: і над, і під лінією. Типово для таврового з’єднання.',
+ s:svg(`${arrow}<path ${W} d="M110 52 L124 52 L110 66 Z"/><path ${W} d="M110 52 L124 52 L110 38 Z"/>`+t(128,100,'шов з обох боків','middle'))},
+{c:'Позначення',t:'Стиковий V-шов',d:'Знак V на опорній лінії. Розробка кромок V-подібна.',
+ s:svg(`${arrow}<path ${S} d="M108 52 L118 66 L128 52"/>`+t(128,100,'V-шов','middle'))},
+{c:'Позначення',t:'Стиковий I-шов',d:'Дві короткі вертикальні лінії: стик без скосу кромок.',
+ s:svg(`${arrow}<path ${S} d="M115 52 V66 M121 52 V66"/>`+t(128,100,'I-шов (без скосу)','middle'))},
+{c:'Позначення',t:'Шов по периметру',d:'Коло на стику стрілки та опорної лінії: шов замкнений навколо деталі (наприклад, стійка по фланцю).',
+ s:svg(`${arrow}<circle cx="82" cy="52" r="6" ${S}/><path ${W} d="M110 52 L124 52 L110 66 Z"/>`+t(128,100,'по всьому контуру','middle'))},
+{c:'Позначення',t:'Монтажний шов',d:'Прапорець на місці зламу: шов виконується на місці монтажу, не в цеху.',
+ s:svg(`${arrow}<path ${S} d="M82 52 V32"/><path ${W} d="M82 32 L96 37 L82 42 Z"/><path ${W} d="M110 52 L124 52 L110 66 Z"/>`+t(128,100,'виконати на об’єкті','middle'))},
+
+/* ВУЗЛИ */
+{c:'Вузли',t:'Стійка огорожі на фланці',d:'Труба/квадрат приварюється до опорного фланця кутовим швом по периметру. Фланець кріпиться анкерами.',
+ s:svg(`<g ${S}><rect x="92" y="15" width="16" height="78"/><rect x="60" y="93" width="80" height="8"/></g><path ${W} d="M92 93 L92 82 L80 93 Z"/><path ${W} d="M108 93 L108 82 L120 93 Z"/><circle cx="68" cy="97" r="2.5" ${S}/><circle cx="132" cy="97" r="2.5" ${S}/>`+t(100,115,'стійка + фланець, шов по периметру','middle'))},
+{c:'Вузли',t:'Поручень на кронштейні',d:'Труба поручня приварена до плоского кронштейна, кронштейн до стійки. Шви зачищають і шліфують.',
+ s:svg(`<g ${S}><rect x="40" y="75" width="14" height="40"/><circle cx="100" cy="40" r="9"/><path d="M54 75 H78 L92 48"/></g><path ${W} d="M54 75 L54 66 L63 75 Z"/>`+t(100,22,'поручень (труба)','middle')+t(110,100,'кронштейн','start'))},
+{c:'Вузли',t:'Балконна огорожа (рама + прути)',d:'Рамка з профільної труби, вертикальні прути приварені до верхнього і нижнього ригелів. Крок прутів вибирають за вимогами безпеки.',
+ s:svg(`<g ${S}><rect x="25" y="20" width="150" height="80"/><path d="M25 32 H175 M25 88 H175"/><path d="M50 32 V88 M75 32 V88 M100 32 V88 M125 32 V88 M150 32 V88"/></g><g fill="#f59e0b" stroke="none"><circle cx="50" cy="32" r="2.5"/><circle cx="75" cy="32" r="2.5"/><circle cx="100" cy="32" r="2.5"/><circle cx="125" cy="32" r="2.5"/><circle cx="150" cy="32" r="2.5"/><circle cx="50" cy="88" r="2.5"/><circle cx="75" cy="88" r="2.5"/><circle cx="100" cy="88" r="2.5"/><circle cx="125" cy="88" r="2.5"/><circle cx="150" cy="88" r="2.5"/></g>`+t(100,114,'жовті точки: місця зварювання','middle'))},
+
+/* ПОЛОЖЕННЯ (текст) */
+{c:'Положення',t:'PA: нижнє',d:'Шов виконується зверху на горизонтальній поверхні. Найзручніше й найякісніше.'},
+{c:'Положення',t:'PB: таврове горизонтальне',d:'Кутовий шов у куті між горизонтальною і вертикальною деталями («в човник» або кутом).'},
+{c:'Положення',t:'PC: горизонтальне на вертикальній площині',d:'Шов іде горизонтально по вертикальній стінці.'},
+{c:'Положення',t:'PD / PE: стельове',d:'PD: стельове таврове; PE: стельове стикове. Найскладніші положення, ризик стікання металу.'},
+{c:'Положення',t:'PF: вертикальне знизу вгору',d:'Шов по вертикалі знизу вгору. Часте для стійок і поручнів.'},
+{c:'Положення',t:'PG: вертикальне зверху вниз',d:'Шов по вертикалі зверху вниз. Застосовують для тонкого металу і спец. електродів.'}
+];
+
+const cats=['Усе',...new Set(DATA.map(x=>x.c))];
+let cat='Усе',q='';
+const $=id=>document.getElementById(id);
+const tabs=$('tabs'),list=$('list');
+cats.forEach(c=>{const b=document.createElement('button');b.className='tab'+(c===cat?' on':'');b.textContent=c;b.onclick=()=>{cat=c;[...tabs.children].forEach(x=>x.classList.toggle('on',x.textContent===c));render()};tabs.appendChild(b)});
+$('q').oninput=e=>{q=e.target.value.trim().toLowerCase();render()};
+
+function render(){
+  const items=DATA.filter(x=>(cat==='Усе'||x.c===cat)&&(!q||(x.t+' '+x.d+' '+x.c).toLowerCase().includes(q)));
+  list.innerHTML='';
+  if(!items.length){list.innerHTML='<div class="empty">Нічого не знайдено</div>';return}
+  items.forEach(x=>{
+    const el=document.createElement('div');el.className='card'+(x.s?'':' nopic');
+    el.innerHTML=(x.s?`<div class="pic">${x.s}</div>`:'')+`<div class="txt"><h3>${x.t}</h3><p>${x.d}</p></div>`;
+    if(x.s)el.querySelector('.pic').onclick=()=>openM(x);
+    list.appendChild(el);
+  });
+}
+
+/* Перегляд з масштабуванням */
+let zoom=100,dist=0;
+const mv=$('mview');
+function applyZoom(){const s=mv.querySelector('svg');if(s)s.style.width=zoom+'%'}
+function openM(x){$('mtitle').textContent=x.t;mv.innerHTML=x.s;zoom=100;applyZoom();$('modal').classList.add('on')}
+$('mx').onclick=()=>$('modal').classList.remove('on');
+$('zp').onclick=()=>{zoom=Math.min(500,zoom+50);applyZoom()};
+$('zm').onclick=()=>{zoom=Math.max(100,zoom-50);applyZoom()};
+mv.addEventListener('touchstart',e=>{if(e.touches.length===2)dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)},{passive:true});
+mv.addEventListener('touchmove',e=>{if(e.touches.length===2){e.preventDefault();const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(dist){zoom=Math.max(100,Math.min(500,zoom*d/dist));applyZoom()}dist=d}},{passive:false});
+mv.addEventListener('touchend',()=>{dist=0});
+
+render();
+/* ===== РОЗРАХУНОК ===== */
+const f1=n=>String(Math.round(n*10)/10).replace('.',',');
+const r0=n=>Math.round(n);
+const KS=(a,wt)=>4*wt*(a-wt)*0.00785;            /* кг/м, квадратна труба */
+const KC=(d,wt)=>Math.PI*(d-wt)*wt*0.00785;      /* кг/м, кругла труба */
+const KR=(a,b,wt)=>2*wt*(a+b-2*wt)*0.00785;      /* кг/м, прямокутна труба */
+const part=(name,prof,qty,len,kgm)=>({name,prof,qty,txt:r0(len)+' мм',mass:qty*len/1000*kgm});
+const plate=(name,prof,qty,w,h,th,k=1)=>({name,prof,qty,txt:r0(w)+'×'+r0(h)+' мм',mass:qty*w*h*th*7.85e-6*k});
+const LN=(x1,y1,x2,y2,extra='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${extra}/>`;
+const dimH=(x1,x2,y,txt)=>`<g stroke="currentColor" stroke-width="1">${LN(x1,y,x2,y)}${LN(x1,y-4,x1,y+4)}${LN(x2,y-4,x2,y+4)}</g><text x="${(x1+x2)/2}" y="${y+13}" text-anchor="middle" font-size="11" fill="currentColor">${txt}</text>`;
+const dimV=(y1,y2,x,txt)=>`<g stroke="currentColor" stroke-width="1">${LN(x,y1,x,y2)}${LN(x-4,y1,x+4,y1)}${LN(x-4,y2,x+4,y2)}</g><text x="${x+7}" y="${(y1+y2)/2+4}" font-size="11" fill="currentColor">${txt}</text>`;
+const AMB='#f59e0b';
+const SV=(vw,vh,b)=>`<svg viewBox="0 0 ${r0(vw)} ${r0(vh)}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">${b}</svg>`;
+const GR='stroke="currentColor" stroke-width="1.5"';
+
+/* --- Пандус --- */
+function ramp(p){
+  const k=p.slope/100,Lh=p.H/k,Ls=Math.hypot(p.H,Lh),ang=Math.atan(k)*180/Math.PI,a=p.a,wt=p.wt;
+  if(Ls<=a*3||p.W<=a*2.5||p.step<=0)throw 0;
+  const kg=KS(a,wt),prof=`${a}×${a}×${wt}`,parts=[],notes=[];
+  parts.push(part('Лонжерони (рама)',prof,2,Ls,kg));
+  const n=Math.ceil((Ls-a)/p.step)+1;
+  parts.push(part('Поперечини',prof,n,p.W-2*a,kg));
+  const ns=Math.ceil(Lh/1000)+1,st=[];
+  for(let i=1;i<ns;i++){const x=i*Lh/(ns-1),h=k*x-a;if(h>60)st.push({x,h});}
+  st.forEach(q=>parts.push(part('Стійка, '+r0(q.x)+' мм від низу',prof,2,q.h,kg)));
+  if(st.length)parts.push(plate('П’ятки стійок','лист 4 мм',st.length*2,100,100,4));
+  parts.push(plate('Настил, рифлений лист',p.sheet+' мм',1,p.W,Ls,p.sheet,1.05));
+  if(p.bump==1)parts.push(plate('Бортики (смуги)','лист 3 мм',2,60,Ls,3));
+  if(p.rail==1){
+    parts.push(part('Поручні (верх 900, низ 700)','кругла 32×2',4,Ls,KC(32,2)));
+    parts.push(part('Стійки поручнів','кругла 32×2',2*(Math.ceil(Ls/1000)+1),920,KC(32,2)));
+  }
+  const weld=((n*2+st.length*2)*4*a)/1000;
+  if(p.slope>8.4)notes.push('Ухил більший за 8% (1:12). Для візків і колясок норми зазвичай вимагають положистіший ухил: перевірте за ДБН В.2.2-40.');
+  if(p.H>750)notes.push('Підйом понад ~750 мм зазвичай розбивають на марші з майданчиком. Перевірте за ДБН.');
+  if(p.W<900)notes.push('Ширина менша за 900 мм: для візка зазвичай потрібно 900–1200 мм і більше. Перевірте за ДБН.');
+  if(Ls>2500)notes.push('Настил довший за стандартний лист 2500 мм: складіть з '+Math.ceil(Ls/2500)+' частин, стики по поперечинах.');
+  if(p.W>1250)notes.push('Ширина більша за 1250 мм: потрібен лист 1500 мм або складений настил.');
+  notes.push('Висоти стійок орієнтовні: підганяйте по місцю. Для вуличного пандуса передбачте відведення води.');
+  const steps=[
+    'Нарізати деталі за списком, торці лонжеронів зрізати під кут '+f1(ang)+'°, зачистити.',
+    'Виставити лонжерони паралельно на рівній поверхні, прихопити поперечини (прихватки 10–15 мм) з кроком '+r0((Ls-a)/(n-1))+' мм.',
+    'Перевірити діагоналі рами (різниця до 2–3 мм), поправити й лише тоді обварювати. Варити поперечини з двох боків, чергуючи сторони, щоб раму не повело.',
+    'Прихопити стійки перпендикулярно, виставити по рівню й висотах, приварити п’ятки.',
+    'Накласти настил, прихопити по кутах і через 200–300 мм, далі варити шахово (переривчастий шов 40–50 мм через 150–200 мм), щоб лист не «повело».',
+    p.bump==1?'Приварити бортики по краях настилу.':null,
+    p.rail==1?'Приварити стійки поручнів по уклону рівнем, потім поручні на 900 і 700 мм.':null,
+    'Зачистити шви болгаркою, обезжирити, ґрунт і фарба.'
+  ].filter(Boolean);
+  const summary=[['Ухил',p.slope+'% (1:'+f1(100/p.slope)+'), '+f1(ang)+'°'],['Довжина по горизонталі',r0(Lh)+' мм'],['Довжина по схилу',r0(Ls)+' мм'],['Орієнтовна довжина швів рами',f1(weld)+' м']];
+  const g={Lh,Ls,k,ang,st};
+  return{summary,parts,notes,steps,svgs:[{t:'Вигляд збоку',svg:rampSide(p,g)},{t:'Вигляд зверху',svg:rampPlan(p,g,n)}]};
+}
+function rampSide(p,g){
+  const mx=34,s=Math.min((380-2*mx-40)/g.Lh,150/p.H),w=g.Lh*s,h=p.H*s,rh=p.rail==1?920*s:0,th=Math.max(3,p.a*s);
+  const gy=18+rh+h,vw=w+2*mx+50,vh=gy+54;
+  let b=LN(mx-10,gy,mx+w+10,gy,GR);
+  g.st.forEach(q=>{const x=mx+q.x*s;b+=LN(x,gy,x,gy-g.k*q.x*s,`stroke="currentColor" stroke-width="${Math.max(2,p.a*s)}" opacity=".6"`)});
+  b+=LN(mx,gy,mx+w,gy-h,`stroke="${AMB}" stroke-width="${th}"`);
+  if(p.rail==1){
+    [920,700].forEach(o=>{b+=LN(mx,gy-o*s,mx+w,gy-h-o*s,'stroke="currentColor" stroke-width="2"')});
+    [0,...g.st.map(q=>q.x)].forEach(x=>{const X=mx+x*s,y=gy-g.k*x*s;b+=LN(X,y,X,y-920*s,'stroke="currentColor" stroke-width="2"')});
+  }
+  b+=dimH(mx,mx+w,gy+16,r0(g.Lh));
+  b+=dimV(gy-h,gy,mx+w+20,p.H);
+  b+=`<text x="${mx+w/2}" y="${gy+46}" text-anchor="middle" font-size="11" fill="currentColor">по схилу ${r0(g.Ls)} мм · ${f1(g.ang)}°</text>`;
+  return SV(vw,vh,b);
+}
+function rampPlan(p,g,n){
+  const mx=30,s=Math.min((380-2*mx-40)/g.Lh,130/p.W),w=g.Lh*s,h=p.W*s,y0=16,vw=w+2*mx+50,vh=y0+h+46,ca=Math.cos(Math.atan(g.k)),as=p.a*s;
+  let b=`<rect x="${mx}" y="${y0}" width="${w}" height="${h}" fill="none" ${GR}/>`;
+  b+=LN(mx,y0+as,mx+w,y0+as,'stroke="currentColor" stroke-width="1"')+LN(mx,y0+h-as,mx+w,y0+h-as,'stroke="currentColor" stroke-width="1"');
+  const sp=(g.Ls-p.a)/(n-1);
+  for(let i=0;i<n;i++){const x=mx+(p.a/2+i*sp)*ca*s;b+=LN(x,y0+as,x,y0+h-as,`stroke="${AMB}" stroke-width="2"`)}
+  b+=dimH(mx,mx+w,y0+h+14,r0(g.Lh));
+  b+=dimV(y0,y0+h,mx+w+14,p.W);
+  return SV(vw,vh,b);
+}
+
+/* --- Секція огорожі --- */
+function railing(p){
+  const L=p.L,H=p.H,d=p.d,c=100,rt=20,parts=[],notes=[];
+  const n=Math.ceil((L-p.gap)/(p.gap+d)),g=(L-n*d)/(n+1),hb=H-c-2*rt;
+  if(hb<=0||n<1)throw 0;
+  parts.push(part('Верхня поперечина','40×20×2',1,L,KR(40,20,2)));
+  parts.push(part('Нижня поперечина','40×20×2',1,L,KR(40,20,2)));
+  parts.push(part('Прути','квадрат '+d+'×'+d,n,hb,d*d*0.00785));
+  if(p.posts==1){parts.push(part('Стійки','40×40×2',2,H,KS(40,2)));parts.push(plate('П’ятки стійок','лист 4 мм',2,100,100,4));}
+  if(p.gap>110)notes.push('Просвіт між прутами більший за ~100 мм: де можуть бути діти, зазвичай потрібно не більше 100 мм. Перевірте за ДБН.');
+  if(H<900)notes.push('Висота огорожі менша за ~900–1000 мм. Для балконів і сходів норми зазвичай вимагають не менше. Перевірте за ДБН.');
+  notes.push('Реальний просвіт між прутами: '+f1(g)+' мм, крок прутів '+f1(g+d)+' мм.');
+  const steps=[
+    'Нарізати прути й поперечини за списком, зачистити торці.',
+    'Прихопити прути до нижньої поперечини на шаблоні з кроком '+f1(g+d)+' мм (зручно: два бруски-шаблони з пазами).',
+    'Накласти верхню поперечину, прихопити всі прути, перевірити перпендикулярність і діагоналі.',
+    'Обварити вузли по черзі через один, щоб секцію не повело.',
+    p.posts==1?'Приварити стійки до секції, п’ятки до стійок.':'Приварити секцію до готових стійок.',
+    'Зачистити шви, ґрунт і фарба.'
+  ];
+  const summary=[['Кількість прутів',n+' шт'],['Довжина прута',r0(hb)+' мм'],['Крок прутів',f1(g+d)+' мм']];
+  const px=p.posts==1?40:0,Wt=L+2*px,mx=24,s=Math.min((380-2*mx-50)/Wt,170/H),gy=14+H*s,vw=Wt*s+2*mx+50,vh=gy+44,x0=mx+px*s;
+  let b=LN(mx-8,gy,mx+Wt*s+8,gy,GR);
+  if(p.posts==1){b+=`<rect x="${mx}" y="${gy-H*s}" width="${px*s}" height="${H*s}" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="${x0+L*s}" y="${gy-H*s}" width="${px*s}" height="${H*s}" fill="none" stroke="currentColor" stroke-width="1.5"/>`;}
+  b+=`<rect x="${x0}" y="${gy-H*s}" width="${L*s}" height="${Math.max(3,rt*s)}" fill="${AMB}" fill-opacity=".5" stroke="${AMB}"/>`;
+  b+=`<rect x="${x0}" y="${gy-(c+rt)*s}" width="${L*s}" height="${Math.max(3,rt*s)}" fill="${AMB}" fill-opacity=".5" stroke="${AMB}"/>`;
+  for(let i=0;i<n;i++){const x=x0+(g*(i+1)+d*i+d/2)*s;b+=LN(x,gy-(c+rt)*s,x,gy-(H-rt)*s,`stroke="currentColor" stroke-width="${Math.max(1.2,d*s)}"`)}
+  b+=dimH(x0,x0+L*s,gy+14,r0(L))+dimV(gy-H*s,gy,mx+Wt*s+14,H);
+  return{summary,parts,notes,steps,svgs:[{t:'Вигляд спереду',svg:SV(vw,vh,b)}]};
+}
+
+/* --- Велопарковка --- */
+function bike(p){
+  const N=p.N,Wd=p.Wd,Hd=p.Hd,R=p.R,pitch=p.pitch,tube=p.tube,wt=2,parts=[],notes=[];
+  if(2*R>Wd||R>=Hd||N>40)throw 0;
+  const dev=2*Hd+Wd-4*R+Math.PI*R;
+  parts.push(part('Дуга (розгортка під гнуття)','кругла '+tube+'×'+wt,N,dev,KC(tube,wt)));
+  parts.push(plate('П’ятки дуг','лист 4 мм',N*2,100,100,4));
+  const total=(N-1)*pitch+Wd;
+  if(pitch<600)notes.push('Крок менший за 600 мм: велосипеди чіплятимуться кермами. Зазвичай 600–800 мм.');
+  notes.push('Розгортка розрахована по осьовій лінії труби: зробіть одну пробну дугу й уточніть довжину.');
+  const steps=[
+    'Нарізати труби на розгортку '+r0(dev)+' мм, зігнути по шаблону (радіус '+R+' мм), перевірити ширину й висоту першої дуги.',
+    'Приварити п’ятки 100×100×4 до обох ніг кожної дуги, шов по периметру.',
+    'Виставити дуги по шаблону з кроком '+pitch+' мм (за потреби з’єднати прутом/смугою знизу).',
+    'Зачистити шви, ґрунт і фарба. Кріплення до основи: анкери через п’ятки.'
+  ];
+  const summary=[['Розгортка дуги',r0(dev)+' мм'],['Загальна довжина парковки',r0(total)+' мм'],['Місць',N+' шт (по одному велосипеду між дугами)']];
+  const mx=24,s=Math.min((380-2*mx-44)/total,140/Hd),gy=20+Hd*s,vw=total*s+2*mx+44,vh=gy+62;
+  let b=LN(mx-8,gy,mx+total*s+8,gy,GR);
+  for(let i=0;i<N;i++){const x0=mx+i*pitch*s,w=Wd*s,h=Hd*s,r=R*s;
+    b+=`<path d="M${x0} ${gy} V${gy-h+r} A${r} ${r} 0 0 1 ${x0+r} ${gy-h} H${x0+w-r} A${r} ${r} 0 0 1 ${x0+w} ${gy-h+r} V${gy}" fill="none" stroke="${AMB}" stroke-width="${Math.max(3,tube*s)}"/>`;}
+  b+=dimH(mx,mx+Wd*s,gy+14,Wd);
+  b+=dimV(gy-Hd*s,gy,mx+total*s+16,Hd);
+  if(N>1)b+=dimH(mx+Wd*s/2,mx+(pitch+Wd/2)*s,gy+40,'крок '+pitch);
+  return{summary,parts,notes,steps,svgs:[{t:'Вигляд спереду',svg:SV(vw,vh,b)}]};
+}
+
+/* ===== UI розрахунку ===== */
+const YN=[[1,'Так'],[0,'Ні']];
+const CALCS={
+  ramp:{name:'Пандус',fn:ramp,f:[['H','Висота підйому, мм',300],['slope','Ухил, %',8],['W','Ширина пандуса, мм',1000],['a','Рама: квадратна труба, мм',40],['wt','Стінка труби, мм',2],['step','Крок поперечин, мм',400],['sheet','Товщина настилу, мм',3],['bump','Бортики 60 мм',1,YN],['rail','Поручні',0,YN],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  rail:{name:'Огорожа',fn:railing,f:[['L','Просвіт між стійками, мм',1500],['H','Висота огорожі, мм',1000],['gap','Макс. просвіт між прутами, мм',100],['d','Пруток (квадрат), мм',12],['posts','Стійки в комплекті',1,YN],['price','Ціна металу, грн/кг (за бажанням)','']]},
+  bike:{name:'Велопарковка',fn:bike,f:[['N','Кількість дуг',4],['Wd','Ширина дуги, мм',600],['Hd','Висота дуги, мм',800],['R','Радіус гину, мм',100],['pitch','Крок між дугами, мм',700],['tube','Труба кругла, діаметр, мм',32],['price','Ціна металу, грн/кг (за бажанням)','']]}
+};
+let ck='ramp';
+const cform=$('cform'),cout=$('cout'),ctabs=$('ctabs');
+Object.keys(CALCS).forEach(k=>{const b=document.createElement('button');b.className='tab'+(k===ck?' on':'');b.textContent=CALCS[k].name;b.onclick=()=>{ck=k;[...ctabs.children].forEach(x=>x.classList.toggle('on',x===b));buildForm()};ctabs.appendChild(b)});
+function buildForm(){
+  let saved={};try{saved=JSON.parse(localStorage.getItem('calc_'+ck)||'{}')}catch(e){}
+  cform.innerHTML=CALCS[ck].f.map(([k,l,def,o])=>{
+    const v=saved[k]!==undefined?(saved[k]===0&&k==='price'?'':saved[k]):def;
+    return o?`<label>${l}<select name="${k}">${o.map(([ov,ol])=>`<option value="${ov}"${String(ov)===String(v)?' selected':''}>${ol}</option>`).join('')}</select></label>`
+            :`<label>${l}<input name="${k}" type="number" inputmode="decimal" step="any" value="${v}"></label>`}).join('');
+  run();
+}
+cform.oninput=()=>run();
+function run(){
+  const c=CALCS[ck],p={};
+  c.f.forEach(([k])=>{const raw=cform.elements[k].value;p[k]=raw===''?0:Number(String(raw).replace(',','.'))});
+  try{localStorage.setItem('calc_'+ck,JSON.stringify(p))}catch(e){}
+  try{
+    if(c.f.some(([k,,,o])=>k!=='price'&&!o&&!(p[k]>0)))throw 0;
+    renderOut(c.fn(p),p);
+  }catch(e){cout.innerHTML='<div class="warn">Перевірте значення: усі розміри мають бути більші за нуль і реальні для цієї конструкції.</div>'}
+}
+function renderOut(res,p){
+  const tot=res.parts.reduce((s,x)=>s+x.mass,0);
+  let h=res.svgs.map(s=>`<div class="card"><div class="pic">${s.svg}</div><div class="txt"><h3>${s.t}</h3><p>Натисніть, щоб збільшити</p></div></div>`).join('');
+  h+='<table class="kv">'+res.summary.map(r=>`<tr><td>${r[0]}</td><td class="n">${r[1]}</td></tr>`).join('')+'</table>';
+  h+=res.notes.map(n=>`<div class="warn">${n}</div>`).join('');
+  h+='<h2 class="s">Список нарізки</h2><table class="kv"><tr><th>Деталь</th><th>Профіль</th><th>Шт</th><th>Розмір</th></tr>'+
+     res.parts.map(x=>`<tr><td>${x.name}</td><td>${x.prof}</td><td class="n">${x.qty}</td><td class="n">${x.txt}</td></tr>`).join('')+'</table>';
+  h+=`<table class="kv"><tr><td>Орієнтовна вага металу</td><td class="n"><b>${f1(tot)} кг</b></td></tr>`+(p.price>0?`<tr><td>Орієнтовна вартість металу</td><td class="n"><b>${r0(tot*p.price).toLocaleString('uk-UA')} грн</b></td></tr>`:'')+'</table>';
+  h+='<h2 class="s">Порядок зварювання</h2><ol class="steps">'+res.steps.map(s=>`<li>${s}</li>`).join('')+'</ol>';
+  h+='<button class="btn" id="copy">Скопіювати список</button>';
+  cout.innerHTML=h;
+  cout.querySelectorAll('.pic').forEach((el,i)=>el.onclick=()=>openM({t:res.svgs[i].t,s:res.svgs[i].svg}));
+  $('copy').onclick=async()=>{
+    const txt=[CALCS[ck].name,...res.summary.map(r=>r[0]+': '+r[1]),'','Список нарізки:',...res.parts.map(x=>`${x.name} | ${x.prof} | ${x.qty} шт | ${x.txt}`),'Вага ~'+f1(tot)+' кг','','Порядок зварювання:',...res.steps.map((s,i)=>(i+1)+'. '+s)].join('\n');
+    try{await navigator.clipboard.writeText(txt);$('copy').textContent='Скопійовано ✓'}catch(e){if(navigator.share)navigator.share({text:txt}).catch(()=>{});else $('copy').textContent='Не вдалося скопіювати'}
+  };
+}
+function setMode(m){
+  const c=m===2;
+  $('list').hidden=c;$('calc').hidden=!c;$('q').hidden=c;$('tabs').hidden=c;
+  $('m1').classList.toggle('on',!c);$('m2').classList.toggle('on',c);
+  if(c&&!cform.innerHTML)buildForm();
+  window.scrollTo(0,0);
+}
+$('m1').onclick=()=>setMode(1);$('m2').onclick=()=>setMode(2);
+
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
